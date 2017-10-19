@@ -65,8 +65,52 @@ let compile_aux expr env =
       )
       :: out), (n - 1))) out env in
   let output, _ = out in
+  let rec compile_expr expr out op alone =
+    match expr with
+    | Var s ->
+        let var = List.find (fun var -> 
+                              let name, offset = var in
+                              (String.compare name s) = 0) env
+        in
+        let _, offset = var in
+        let out = 
+        ("\tmovq   " ^ (string_of_int offset) ^ "(%rbp), %rax\n")
+        :: out in
+        if not alone then 
+          (if op then "\tpushq   %rax\n" else "\tpopq   %rbx\n")
+          :: out
+        else out
+    | Or (e1, e2) -> let out = (compile_expr e1 [] true false) @ out in
+                     let out = (compile_expr e2 [] false false) @ out in
+                     let out = "\torq   %rbx, %rax\n" :: out in
+                     if not alone then  
+                       (if op then "\tpushq   %rax\n" else "\tpopq   %rbx\n")
+                       :: out
+                     else
+                       out
+    | And (e1, e2) -> let out = (compile_expr e1 [] true false) @ out in
+                      let out = (compile_expr e2 [] false false) @ out in
+                      let out = "\tandq   %rbx, %rax\n" :: out in
+                      if not alone then 
+                        (if op then "\tpushq   %rax\n" else "\tpopq   %rbx\n")
+                        :: out
+                      else
+                        out
+    | Not e -> if op then (* Not is not working ! *)
+                    let out = (compile_expr e [] false true) @ out in 
+                    ("\tnotq   %rbx\n" ^
+                    "\tpushq   %rax\n")
+                    :: out 
+               else let out = (compile_expr e [] false true) @ out in
+                    ("\tnotq   %rbx\n" ^
+                    "\tpopq   %rbx\n")
+                    :: out
+  in
+  let output = compile_expr expr output true true in
   let output = List.rev output in
   let output = String.concat "" output in
   Printf.printf "%s" output
 
-let _ = compile_aux (Var ("")) (["toto", 5; "tata", 7; "var", 2])
+(* TODO réecrire la partie 1 avec offset + affichage *)
+
+let _ = compile_aux (And(Var ("x1"),Var ("x2"))) (["x1", (-24); "x2", (-16); "x3", (-8)])
